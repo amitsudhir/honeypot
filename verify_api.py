@@ -2,7 +2,13 @@ import requests
 import time
 import sys
 
-BASE_URL = "http://127.0.0.1:8004"
+BASE_URL = "http://127.0.0.1:8000"
+
+# Load actual key from .env for testing, or default to placeholder
+from dotenv import load_dotenv
+import os
+load_dotenv()
+APP_API_KEY = os.getenv("APP_API_KEY", "secret123")
 
 def wait_for_server():
     print("Waiting for server...")
@@ -21,7 +27,7 @@ def test_safe_message():
         "message": "Hey, are we still meeting for lunch today?",
         "session_id": "test_safe"
     }
-    headers = {"x-api-key": "my_secret_judge_key_123"}
+    headers = {"x-api-key": APP_API_KEY}
     res = requests.post(f"{BASE_URL}/honeypot", json=payload, headers=headers)
     if res.status_code != 200:
         print(f"FAILED: Status {res.status_code}")
@@ -41,7 +47,7 @@ def test_scam_message():
         "message": "Congratulations! You have won a lottery of $1,000,000. Please send your bank details to claim it.",
         "session_id": "test_scam"
     }
-    headers = {"x-api-key": "my_secret_judge_key_123"}
+    headers = {"x-api-key": APP_API_KEY}
     res = requests.post(f"{BASE_URL}/honeypot", json=payload, headers=headers)
     if res.status_code != 200:
         print(f"FAILED: Status {res.status_code}")
