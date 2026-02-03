@@ -63,17 +63,31 @@ class HoneypotResponse(BaseModel):
 
 from fastapi import Request
 
+@app.get("/")
+async def root():
+    return {"status": "active", "service": "Honeypot API"}
+
 @app.post("/honeypot", response_model=HoneypotResponse)
 async def honey_pot_endpoint(request: Request, api_key: str = Depends(get_api_key)):
     try:
-        body = await request.json()
-        print(f"[DEBUG] Raw Incoming Body: {body}")
+        # DEBUGGING: Log everything
+        raw_body = await request.body()
+        print(f"[DEBUG] Headers: {request.headers}")
+        print(f"[DEBUG] Raw Bytes: {raw_body}")
+        
+        body = {}
+        try:
+            body = await request.json()
+        except:
+            print("[DEBUG] JSON Decode Failed (Body might be empty or text)")
         
         # Handle flexible input keys
-        message = body.get("message") or body.get("text") or body.get("input") or body.get("content")
+        message = body.get("message") or body.get("text") or body.get("input") or body.get("content") or body.get("query")
         
+        # Fallback if message is empty (Prevent crash, just return safe)
         if not message:
-             raise HTTPException(status_code=422, detail="Missing 'message' or 'text' field in JSON body")
+             print("[WARN] No message found. Defaulting to empty string.")
+             message = ""
 
         session_id = body.get("session_id") or str(uuid.uuid4())
         

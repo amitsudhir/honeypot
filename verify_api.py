@@ -24,7 +24,7 @@ def wait_for_server():
 def test_safe_message():
     print("\n[TEST] Safe Message")
     payload = {
-        "message": "Hey, are we still meeting for lunch today?",
+        "text": "Hey, are we still meeting for lunch today?",
         "session_id": "test_safe"
     }
     headers = {"x-api-key": APP_API_KEY}
