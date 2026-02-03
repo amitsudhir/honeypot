@@ -2,7 +2,7 @@ import requests
 import time
 import sys
 
-BASE_URL = "http://127.0.0.1:8000"
+BASE_URL = "https://honeypot-ak8x.onrender.com"
 
 # Load actual key from .env for testing, or default to placeholder
 from dotenv import load_dotenv
