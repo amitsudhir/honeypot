@@ -34,6 +34,16 @@ from agents import HoneypotAgent
 
 app = FastAPI(title="Agentic Honey-Pot API", description="AI-powered scam detection and intelligence extraction API.")
 
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow ALL origins (Hackathon Portal needs this)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Initialize Components
 memory_manager = MemoryManager()
 persona_manager = PersonaManager()
