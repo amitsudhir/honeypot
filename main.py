@@ -81,7 +81,7 @@ async def root():
 async def honeypot_get():
     return {"message": "Honeypot Endpoint is Active. Send POST request with JSON body."}
 
-@app.post("/honeypot", response_model=HoneypotResponse)
+@app.post("/honeypot")
 async def honey_pot_endpoint(request: Request, api_key: str = Depends(get_api_key)):
     try:
         # DEBUGGING: Log everything
