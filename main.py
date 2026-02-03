@@ -77,6 +77,10 @@ from fastapi import Request
 async def root():
     return {"status": "active", "service": "Honeypot API"}
 
+@app.get("/honeypot")
+async def honeypot_get():
+    return {"message": "Honeypot Endpoint is Active. Send POST request with JSON body."}
+
 @app.post("/honeypot", response_model=HoneypotResponse)
 async def honey_pot_endpoint(request: Request, api_key: str = Depends(get_api_key)):
     try:
@@ -91,28 +95,50 @@ async def honey_pot_endpoint(request: Request, api_key: str = Depends(get_api_ke
         except:
             print("[DEBUG] JSON Decode Failed (Body might be empty or text)")
         
-        # Handle flexible input keys
-        # The portal sends: "message": {"text": "..."} (Nested Dict)
-        raw_msg = body.get("message")
+        # Handle flexible input keys - defensive parsing
+        raw_msg = None
+        session_id = str(uuid.uuid4())
         
-        message = ""
-        if isinstance(raw_msg, dict):
-            # Extract text from nested dict
-            message = raw_msg.get("text") or raw_msg.get("content") or str(raw_msg)
-        elif raw_msg:
-            # It's a string
-            message = str(raw_msg)
-        else:
-            # Try aliases
-            message = body.get("text") or body.get("input") or body.get("content") or body.get("query")
+        if isinstance(body, dict):
+            # Standard dict body
+            # Check for nested "message": {"text": "..."}
+            sub_msg = body.get("message")
+            if isinstance(sub_msg, dict):
+                raw_msg = sub_msg.get("text") or sub_msg.get("content") or str(sub_msg)
+            elif sub_msg:
+                raw_msg = sub_msg
+            else:
+                # Check aliases at root level
+                raw_msg = body.get("text") or body.get("input") or body.get("content") or body.get("query")
+            
+            # Session ID
+            session_id = body.get("session_id") or body.get("sessionId") or session_id
+            
+        elif isinstance(body, list):
+             # Weird case: Body is a list?
+             print(f"[WARN] Body is a list: {body}")
+             if len(body) > 0 and isinstance(body[0], dict):
+                 raw_msg = body[0].get("message") or body[0].get("text")
         
-        # Fallback if message is still empty
-        if not message:
-             print("[WARN] No message found. Defaulting to empty string.")
-             message = ""
+        elif isinstance(body, str):
+             # Body might be just a plain string
+             raw_msg = body
 
-        # Handle 'sessionId' vs 'session_id' (Portal sends 'sessionId')
-        session_id = body.get("session_id") or body.get("sessionId") or str(uuid.uuid4())
+        # Final Message Cleaning
+        message = str(raw_msg) if raw_msg else ""
+        
+        # FAIL-SAFE: If message is empty, Return SAFE immediately (Don't call LLM)
+        if not message.strip():
+             print("[WARN] No message found. Returning SAFE default.")
+             return HoneypotResponse(
+                scam=False,
+                confidence=0.0,
+                reply=None,
+                persona=None,
+                extracted={"upi": None, "bank_account": None, "ifsc": None, "link": None},
+                conversation_turns=0,
+                session_id=session_id
+            )
         
         # 2. Classification
         is_scam, confidence, label = await classifier.classify(message)
