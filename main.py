@@ -61,15 +61,24 @@ class HoneypotResponse(BaseModel):
     conversation_turns: int
     session_id: str
 
+from fastapi import Request
+
 @app.post("/honeypot", response_model=HoneypotResponse)
-async def honey_pot_endpoint(request: HoneypotRequest, api_key: str = Depends(get_api_key)):
+async def honey_pot_endpoint(request: Request, api_key: str = Depends(get_api_key)):
     try:
-        # 1. Session Management
-        # Generate a UUID if the client didn't send one (e.g. first request)
-        session_id = request.session_id or str(uuid.uuid4())
+        body = await request.json()
+        print(f"[DEBUG] Raw Incoming Body: {body}")
+        
+        # Handle flexible input keys
+        message = body.get("message") or body.get("text") or body.get("input") or body.get("content")
+        
+        if not message:
+             raise HTTPException(status_code=422, detail="Missing 'message' or 'text' field in JSON body")
+
+        session_id = body.get("session_id") or str(uuid.uuid4())
         
         # 2. Classification
-        is_scam, confidence, label = await classifier.classify(request.message)
+        is_scam, confidence, label = await classifier.classify(message)
         
         reply = None
         persona_name = None
@@ -80,10 +89,10 @@ async def honey_pot_endpoint(request: HoneypotRequest, api_key: str = Depends(ge
         # 3. Honeypot Activation
         if is_scam:
             # Generate Reply
-            reply = await agent.generate_reply(session_id, request.message)
+            reply = await agent.generate_reply(session_id, message)
             
             # Extract Intelligence
-            new_extracted = await extractor.extract(request.message)
+            new_extracted = await extractor.extract(message)
             memory_manager.update_extracted(session_id, new_extracted)
             
             # Get Accumulated Intelligence
@@ -118,7 +127,7 @@ async def honey_pot_endpoint(request: HoneypotRequest, api_key: str = Depends(ge
             persona=None,
             extracted={"upi": None, "bank_account": None, "ifsc": None, "link": None},
             conversation_turns=0,
-            session_id=request.session_id or "error"
+            session_id=session_id or "error"
         )
 
 # For running with python main.py mostly for debugging, usually use uvicorn
