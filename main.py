@@ -82,14 +82,27 @@ async def honey_pot_endpoint(request: Request, api_key: str = Depends(get_api_ke
             print("[DEBUG] JSON Decode Failed (Body might be empty or text)")
         
         # Handle flexible input keys
-        message = body.get("message") or body.get("text") or body.get("input") or body.get("content") or body.get("query")
+        # The portal sends: "message": {"text": "..."} (Nested Dict)
+        raw_msg = body.get("message")
         
-        # Fallback if message is empty (Prevent crash, just return safe)
+        message = ""
+        if isinstance(raw_msg, dict):
+            # Extract text from nested dict
+            message = raw_msg.get("text") or raw_msg.get("content") or str(raw_msg)
+        elif raw_msg:
+            # It's a string
+            message = str(raw_msg)
+        else:
+            # Try aliases
+            message = body.get("text") or body.get("input") or body.get("content") or body.get("query")
+        
+        # Fallback if message is still empty
         if not message:
              print("[WARN] No message found. Defaulting to empty string.")
              message = ""
 
-        session_id = body.get("session_id") or str(uuid.uuid4())
+        # Handle 'sessionId' vs 'session_id' (Portal sends 'sessionId')
+        session_id = body.get("session_id") or body.get("sessionId") or str(uuid.uuid4())
         
         # 2. Classification
         is_scam, confidence, label = await classifier.classify(message)
