@@ -14,7 +14,7 @@ def wait_for_server():
     print("Waiting for server...")
     for _ in range(30):
         try:
-            requests.get(f"{BASE_URL}/docs")
+            requests.get(f"{BASE_URL}/")
             print("Server is up!")
             return True
         except requests.exceptions.ConnectionError:
@@ -24,8 +24,8 @@ def wait_for_server():
 def test_safe_message():
     print("\n[TEST] Safe Message")
     payload = {
-        "text": "Hey, are we still meeting for lunch today?",
-        "session_id": "test_safe"
+        "message": {"text": "Hey, are we still meeting for lunch today?"},
+        "sessionId": "test_safe"
     }
     headers = {"x-api-key": APP_API_KEY}
     res = requests.post(f"{BASE_URL}/honeypot", json=payload, headers=headers)
@@ -36,16 +36,17 @@ def test_safe_message():
     
     data = res.json()
     print(f"Response: {data}")
-    if not data['scam']:
-        print("PASSED: Correctly identified as SAFE.")
+    # Safe message should have NO reply (or simplified status)
+    if data.get('status') == 'success' and not data.get('reply'):
+        print("PASSED: Correctly identified as SAFE (No reply).")
     else:
-        print("FAILED: Incorrectly identified as SCAM.")
+        print("FAILED: Generated a reply for a safe message.")
 
 def test_scam_message():
     print("\n[TEST] Scam Message")
     payload = {
-        "message": "Congratulations! You have won a lottery of $1,000,000. Please send your bank details to claim it.",
-        "session_id": "test_scam"
+        "message": {"text": "Congratulations! You have won a lottery of $1,000,000. Please send your bank details to claim it."},
+        "sessionId": "test_scam"
     }
     headers = {"x-api-key": APP_API_KEY}
     res = requests.post(f"{BASE_URL}/honeypot", json=payload, headers=headers)
@@ -55,14 +56,12 @@ def test_scam_message():
 
     data = res.json()
     print(f"Response: {data}")
-    if data['scam']:
-        print("PASSED: Correctly identified as SCAM.")
-        if data['reply']:
-            print(f"Agent Reply: {data['reply']}")
-        else:
-            print("WARNING: No reply generated.")
+    # Scam message MUST have a reply
+    if data.get('status') == 'success' and data.get('reply'):
+        print("PASSED: Generated reply for SCAM.")
+        print(f"Agent Reply: {data['reply']}")
     else:
-        print("FAILED: Incorrectly identified as SAFE.")
+        print("FAILED: No reply generated for scam.")
 
 if __name__ == "__main__":
     if not wait_for_server():

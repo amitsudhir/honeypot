@@ -30,19 +30,26 @@ class MemoryManager:
         if session_id in self.session_data:
             del self.session_data[session_id]
 
-    def update_extracted(self, session_id: str, data: Dict[str, str]):
+    def update_extracted(self, session_id: str, data: Dict[str, list]):
         if session_id not in self.session_data:
             self.session_data[session_id] = {
-                "upi": None, "bank_account": None, "ifsc": None, "link": None
+                "bankAccounts": [], "upiIds": [], "phishingLinks": [], 
+                "phoneNumbers": [], "suspiciousKeywords": []
             }
         
-        # Merge new non-null values
+        # Merge lists and ensure uniqueness
         current = self.session_data[session_id]
-        for k, v in data.items():
-            if v:
-                current[k] = v
+        for k, v_list in data.items():
+            if v_list and isinstance(v_list, list):
+                # Add new items that aren't already there
+                existing = set(current.get(k, []))
+                for item in v_list:
+                    if item not in existing:
+                        current[k].append(item)
+                        existing.add(item)
 
-    def get_extracted(self, session_id: str) -> Dict[str, str]:
+    def get_extracted(self, session_id: str) -> Dict[str, list]:
         return self.session_data.get(session_id, {
-            "upi": None, "bank_account": None, "ifsc": None, "link": None
+            "bankAccounts": [], "upiIds": [], "phishingLinks": [], 
+            "phoneNumbers": [], "suspiciousKeywords": []
         })

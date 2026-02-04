@@ -17,7 +17,7 @@ class IntelligenceExtractor:
 
     async def extract(self, text: str) -> Dict[str, Any]:
         """
-        Combines Regex and LLM extraction to get structured intelligence.
+        Combines Regex and LLM extraction to get structured intelligence lists.
         """
         # 1. Regex Extraction (Fast, precise for patterns)
         regex_data = self._extract_regex(text)
@@ -25,67 +25,65 @@ class IntelligenceExtractor:
         # 2. LLM Extraction (Smart, handles context/formatting)
         llm_data = await self._extract_llm(text)
 
-        # 3. Merge Strategies
-        # We prioritize regex for strict patterns (like UPI/Links) if they match,
-        # but LLM might catch things regex misses (like "my number is 99...")
-        
+        # 3. Merge Strategies (Union of lists)
         merged = {
-            "upi": regex_data.get("upi") or llm_data.get("upi"),
-            "bank_account": regex_data.get("bank_account") or llm_data.get("bank_account"),
-            "ifsc": regex_data.get("ifsc") or llm_data.get("ifsc"),
-            "link": regex_data.get("link") or llm_data.get("link")
+            "bankAccounts": list(set(regex_data.get("bankAccounts", []) + llm_data.get("bankAccounts", []))),
+            "upiIds": list(set(regex_data.get("upiIds", []) + llm_data.get("upiIds", []))),
+            "phishingLinks": list(set(regex_data.get("phishingLinks", []) + llm_data.get("phishingLinks", []))),
+            "phoneNumbers": list(set(regex_data.get("phoneNumbers", []) + llm_data.get("phoneNumbers", []))),
+            "suspiciousKeywords": list(set(llm_data.get("suspiciousKeywords", []))) # LLM only for keywords
         }
         return merged
 
-    def _extract_regex(self, text: str) -> Dict[str, Optional[str]]:
+    def _extract_regex(self, text: str) -> Dict[str, list]:
         data = {
-           "upi": None,
-           "bank_account": None,
-           "ifsc": None,
-           "link": None
+           "bankAccounts": [],
+           "upiIds": [],
+           "phishingLinks": [],
+           "phoneNumbers": [],
+           "suspiciousKeywords": []
         }
 
-        # UPI Pattern (e.g., example@oksbi)
+        # UPI Pattern
         upi_pattern = r'[a-zA-Z0-9.\-_]+@[a-zA-Z]+'
-        upi_match = re.search(upi_pattern, text)
-        if upi_match:
-            data['upi'] = upi_match.group(0)
+        data['upiIds'] = re.findall(upi_pattern, text)
 
-        # Link Pattern (http/https)
+        # Link Pattern
         url_pattern = r'https?://(?:[-\w.]|(?:%[\da-fA-F]{2}))+'
-        url_match = re.search(url_pattern, text)
-        if url_match:
-            data['link'] = url_match.group(0)
+        data['phishingLinks'] = re.findall(url_pattern, text)
 
-        # IFSC Pattern (4 letters, 0, 6 chars)
-        ifsc_pattern = r'[A-Z]{4}0[A-Z0-9]{6}'
-        ifsc_match = re.search(ifsc_pattern, text)
-        if ifsc_match:
-            data['ifsc'] = ifsc_match.group(0)
+        # Phone Pattern (Indian +91 or 10 digits)
+        phone_pattern = r'(?:\+91[\-\s]?)?[6-9]\d{9}'
+        data['phoneNumbers'] = re.findall(phone_pattern, text)
 
-        # Bank Account (Simple 9-18 digits, careful not to match phone numbers)
-        # This is hard with regex alone without context, relies mostly on LLM.
-        # But we can try looking for "Account" keyword context or just long digits.
-        # For now, let's rely on LLM for Bank Account to avoid false positives with phone numbers.
+        # Bank Account (Simple 9-18 digits context) - Weak regex, relying more on LLM
+        # But we can try catching long number strings
+        bank_pattern = r'\b\d{9,18}\b'
+        possible_accounts = re.findall(bank_pattern, text)
+        # Filter out 10 digit numbers that look like phones
+        data['bankAccounts'] = [acc for acc in possible_accounts if len(acc) != 10]
         
         return data
 
-    async def _extract_llm(self, text: str) -> Dict[str, Optional[str]]:
+    async def _extract_llm(self, text: str) -> Dict[str, list]:
         try:
             if not self.api_key:
                 return {}
             
             prompt = """
-            Extract the following scam intelligence from the message. 
-            Return a JSON object with keys: "upi", "bank_account", "ifsc", "link".
-            Values should be null if not found.
+            Extract scam intelligence from the message. 
+            Return a JSON object with keys: "bankAccounts", "upiIds", "phishingLinks", "phoneNumbers", "suspiciousKeywords".
+            Values must be LISTS of strings. Return empty list [] if nothing found.
+            
+            "suspiciousKeywords": specific urgent/scam words used (e.g. "blocked", "verify", "expire").
+            
             Message: "{text}"
             """
             
             response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=[
-                    {"role": "system", "content": "You are a helpful data extractor. Output only valid JSON."},
+                    {"role": "system", "content": "You are a helpful data extractor. Output only valid JSON with lists."},
                     {"role": "user", "content": prompt.format(text=text)}
                 ],
                 temperature=0,
@@ -95,6 +93,5 @@ class IntelligenceExtractor:
             content = response.choices[0].message.content
             return json.loads(content)
         except Exception as e:
-            # Fallback or log error
             print(f"Extraction Error: {e}")
-            return {"upi": None, "bank_account": None, "ifsc": None, "link": None}
+            return {"bankAccounts": [], "upiIds": [], "phishingLinks": [], "phoneNumbers": [], "suspiciousKeywords": []}
