@@ -14,12 +14,11 @@ api_key_header = APIKeyHeader(name="x-api-key", auto_error=False)
 
 def get_api_key(api_key_header: str = Security(api_key_header)):
     if not APP_API_KEY:
-        return None 
-    
-    if api_key_header == APP_API_KEY:
+        return None
+    # Flexible check: strip whitespace
+    if api_key_header and api_key_header.strip() == APP_API_KEY.strip():
         return api_key_header
-    
-    raise HTTPException(status_code=403, detail="Could not validate credentials")
+    return None
 
 # Import modules
 from memory import MemoryManager
@@ -69,12 +68,24 @@ from callback import send_guvi_callback
 
 @app.post("/honeypot")
 @app.head("/honeypot")
-async def honey_pot_endpoint(request: Request, background_tasks: BackgroundTasks, api_key: str = Depends(get_api_key)):
+async def honey_pot_endpoint(request: Request, background_tasks: BackgroundTasks, api_key: Optional[str] = Depends(get_api_key)):
     try:
         # Debug Logging
         print(f"Headers: {request.headers}")
-        raw_body = await request.body()
-        print(f"Raw Body: {raw_body.decode('utf-8', errors='ignore')}")
+        try:
+            raw_body = await request.body()
+            print(f"Raw Body: {raw_body.decode('utf-8', errors='ignore')}")
+        except:
+            pass
+
+        # --- 0. Auth Check (Soft Fail) ---
+        if APP_API_KEY and not api_key:
+             print("Authentication Failed!")
+             # Return valid JSON schema even on error, to satisfy Portal Parser
+             return {
+                 "status": "error", 
+                 "reply": "Authentication Failed. Check x-api-key header."
+             }
 
         body = {}
         try:
