@@ -37,13 +37,6 @@ uvicorn main:app --reload
 ```
 API will be live at `http://127.0.0.1:8000`.
 
-## 🧪 Testing
-I've included a script `verify_api.py` to run some sanity checks.
-```bash
-python verify_api.py
-```
-It tests a safe message and a scam message to make sure the classifier is waking up correctly.
-You can also use `curl` (check the code comments for headers).
 
 ## 📝 Notes
 - The "Persona" is currently stateless between server restarts because we store session data in memory (`memory.py`). For production, we should move this to Redis.
