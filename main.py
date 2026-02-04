@@ -68,9 +68,14 @@ from fastapi import BackgroundTasks
 from callback import send_guvi_callback
 
 @app.post("/honeypot")
+@app.head("/honeypot")
 async def honey_pot_endpoint(request: Request, background_tasks: BackgroundTasks, api_key: str = Depends(get_api_key)):
     try:
+        # Debug Logging
+        print(f"Headers: {request.headers}")
         raw_body = await request.body()
+        print(f"Raw Body: {raw_body.decode('utf-8', errors='ignore')}")
+
         body = {}
         try:
             body = await request.json()
