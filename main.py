@@ -64,6 +64,9 @@ async def honeypot_get():
     return {"message": "Honeypot Endpoint is Active. Send POST request with JSON body."}
 
 from fastapi import BackgroundTasks
+from callback import send_guvi_callback
+import json
+
 # --- Standard Endpoint ---
 @app.post("/honeypot")
 @app.head("/honeypot", include_in_schema=False)
@@ -86,7 +89,7 @@ async def honey_pot_endpoint(request: Request, background_tasks: BackgroundTasks
         if APP_API_KEY:
             if not api_key_header or api_key_header.strip() != APP_API_KEY.strip():
                 print(f"[Auth] Invalid Key: {api_key_header}")
-                response_data["status"] = "error"
+                # Portal requires status: "success" always, even for auth failures
                 response_data["reply"] = "Authentication Failed."
                 return response_data
 
