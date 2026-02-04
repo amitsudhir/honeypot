@@ -56,6 +56,7 @@ class HoneypotRequest(BaseModel):
 from fastapi import Request
 
 @app.get("/")
+@app.head("/")
 async def root():
     return {"status": "active", "service": "Honeypot API"}
 

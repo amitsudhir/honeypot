@@ -1,7 +1,7 @@
 import requests
 import json
 
-BASE_URL = "http://127.0.0.1:8000"
+BASE_URL = "https://honeypot-ak8x.onrender.com"
 API_KEY = "secret123"
 
 def test_exact_failure_case():
