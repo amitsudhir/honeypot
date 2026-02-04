@@ -1,26 +1,14 @@
-from fastapi import FastAPI, HTTPException, Security, Depends
-from fastapi.security import APIKeyHeader, APIKeyQuery
+from fastapi import FastAPI, Request, BackgroundTasks
 from pydantic import BaseModel
-from typing import Optional, Dict
+from typing import Optional
 import uuid
 import os
+import json
 from dotenv import load_dotenv
 
-# Load env vars
 load_dotenv()
-
 APP_API_KEY = os.getenv("APP_API_KEY")
-api_key_header = APIKeyHeader(name="x-api-key", auto_error=False)
 
-def get_api_key(api_key_header: str = Security(api_key_header)):
-    if not APP_API_KEY:
-        return None
-    # Flexible check: strip whitespace
-    if api_key_header and api_key_header.strip() == APP_API_KEY.strip():
-        return api_key_header
-    return None
-
-# Import modules
 from memory import MemoryManager
 from persona import PersonaManager
 from classifier import ScamClassifier
@@ -63,49 +51,34 @@ async def root():
 async def honeypot_get():
     return {"message": "Honeypot Endpoint is Active. Send POST request with JSON body."}
 
-from fastapi import BackgroundTasks
 from callback import send_guvi_callback
-import json
 
-# --- Standard Endpoint ---
 @app.post("/honeypot")
 @app.head("/honeypot", include_in_schema=False)
 async def honey_pot_endpoint(request: Request, background_tasks: BackgroundTasks):
-    """
-    Standard Honeypot Endpoint.
-    Handles SCAM detection and Intelligence Extraction.
-    """
-    # Default Error Response (Safe Fallback)
     response_data = {
-        "status": "success", # Defaulting to success to ensure Portal receives JSON
+        "status": "success",
         "reply": "I did not understand that."
     }
 
     try:
-        # 1. Manual Auth Check (Clean & Robust)
-        # Prevents FastAPI from throwing 403/422 which breaks the Portal's validator
         api_key_header = request.headers.get("x-api-key")
         
         if APP_API_KEY:
             if not api_key_header or api_key_header.strip() != APP_API_KEY.strip():
                 print(f"[Auth] Invalid Key: {api_key_header}")
-                # Portal requires status: "success" always, even for auth failures
                 response_data["reply"] = "Authentication Failed."
                 return response_data
 
-        # 2. Parse Body
         try:
             body = await request.json()
         except:
-            # If body is empty or invalid JSON, return default response peacefully
             return response_data
 
-        # 3. Extract Session & Message
         session_id = str(uuid.uuid4())
         if isinstance(body, dict):
             session_id = body.get("sessionId") or body.get("session_id") or session_id
 
-        # Message Text Extraction (Nested or Flat)
         message_text = ""
         raw_msg = body.get("message")
         
@@ -119,21 +92,17 @@ async def honey_pot_endpoint(request: Request, background_tasks: BackgroundTasks
         if not message_text.strip():
             return response_data
 
-        # 4. Core Logic
         try:
             is_scam, confidence, label = await classifier.classify(message_text)
             
             if is_scam:
-                # 1. Extract Intel
                 new_ext = await extractor.extract(message_text)
                 memory_manager.update_extracted(session_id, new_ext)
                 
-                # 2. Generate Reply
                 reply = await agent.generate_reply(session_id, message_text)
                 if reply:
                     response_data["reply"] = reply
                 
-                # 3. Queue Callback
                 try:
                     current_ext = memory_manager.get_extracted(session_id)
                     agent_notes = f"Scam detected ({label}). Conf: {confidence}"
